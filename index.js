@@ -14,18 +14,30 @@ app.get("/", (req, res) => {
 })
 
 app.post("/prompt", async (req, res) => {
-    const { assunto, texto } = req.body 
+    const { assunto, texto } = req.body ?? {}
 
-    if (!texto || texto.trim().length === 0) {
+    if (typeof texto !== "string" || texto.trim().length === 0) {
         return res.status(400).json({ mensagem: "Você não informou nenhum texto válido para a análise" })
     }
 
-    if (!assunto || assunto.trim().length === 0) {
-        return res.status(400).json({ mensagem: "Você não informou nenhum texto válido para a análise" })
+    if (typeof assunto !== "string" || assunto.trim().length === 0) {
+        return res.status(400).json({ mensagem: "Você não informou o assunto do texto" })
+    }
+
+    if (assunto.trim().length > 100) {
+        return res.status(400).json({ mensagem: "O assunto deve ter no máximo 100 caracteres" })
+    }
+
+    if (texto.trim().length < 50) {
+        return res.status(400).json({ mensagem: "O texto é muito curto para análise (mínimo de 50 caracteres)" })
+    }
+
+    if (texto.length > 20000) {
+        return res.status(400).json({ mensagem: "O texto é muito longo (máximo de 20.000 caracteres)" })
     }
 
     try {
-        const resultado = await service.enviarPrompt(assunto, texto)
+        const resultado = await service.enviarPrompt(assunto.trim(), texto.trim())
 
         return res.json({ resposta: resultado.resposta })
 
@@ -34,6 +46,17 @@ app.post("/prompt", async (req, res) => {
             error: "O serviço está indisponível."
         })
     }
+})
+
+app.use((error, req, res, next) => {
+    if (error.type === "entity.parse.failed") {
+        return res.status(400).json({ mensagem: "O corpo da requisição não é um JSON válido" })
+    }
+    if (error.type === "entity.too.large") {
+        return res.status(413).json({ mensagem: "O texto enviado é grande demais" })
+    }
+    console.error(error)
+    return res.status(500).json({ mensagem: "Erro interno no servidor" })
 })
 
 app.listen(5050, (error) => {
